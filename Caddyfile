@@ -1,0 +1,51 @@
+{
+	admin off
+	auto_https off
+
+	log {
+		format json
+	}
+}
+
+:{$CADDY_PORT:80} {
+	log {
+		format json
+		output stdout
+	}
+
+	@cors_origin {
+		header_regexp Origin ^https?://({$CORS_DOMAINS:localhost})$
+	}
+
+	@cors_preflight {
+		method OPTIONS
+		header_regexp Origin ^https?://({$CORS_DOMAINS:localhost})$
+	}
+
+	handle @cors_preflight {
+		header {
+			Access-Control-Allow-Origin "{header.Origin}"
+			Access-Control-Allow-Methods "GET,OPTIONS"
+			Access-Control-Allow-Headers "{$ALLOWED_HEADERS:*}"
+			# Access-Control-Allow-Credentials "true"
+			Access-Control-Max-Age "86400"
+			Vary "Origin"
+		}
+		respond 204
+	}
+
+	handle @cors_origin {
+		header {
+			Access-Control-Allow-Origin "{header.Origin}"
+			# Access-Control-Allow-Credentials "true"
+			Vary "Origin"
+		}
+	}
+
+	import {$CADDY_IMPORTS_PATH:/etc/caddy.d/*}
+
+	root * {$PUBLIC_RESOURCES_DIR:/public}
+	file_server
+
+	encode gzip
+}

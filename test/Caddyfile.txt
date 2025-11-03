@@ -1,0 +1,46 @@
+your_domain.com {
+    # Replace with your actual root and other directives
+    root * /srv
+    file_server
+
+    # --- CORS Configuration ---
+
+    # This named matcher checks if the request Origin header is in the list of allowed origins.
+    # Set the ALLOWED_ORIGINS environment variable to a space-separated list of domains.
+    # e.g., "http://localhost:3000 https://my-app.com"
+    @cors header Origin {env.ALLOWED_ORIGINS}
+
+    # This named matcher identifies preflight OPTIONS requests.
+    @preflight method OPTIONS
+
+    # Apply CORS headers to all matching requests.
+    header @cors {
+        # Reflect the request's Origin header in the Access-Control-Allow-Origin response header.
+        Access-Control-Allow-Origin "{header.origin}"
+
+        # Specify allowed methods.
+        Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+
+        # Allow all headers requested by the client. For tighter security, you can list
+        # specific headers like "Content-Type, Authorization".
+        Access-Control-Allow-Headers "*"
+
+        # Allow credentials (e.g., cookies, authorization headers).
+        Access-Control-Allow-Credentials "true"
+
+        # Set a max age for preflight requests to be cached by the browser.
+        Access-Control-Max-Age "86400"
+
+        # The 'defer' keyword ensures these headers are applied even if another handler
+        # writes the response.
+        defer
+    }
+
+    # Immediately respond to preflight OPTIONS requests with a 204 No Content and no body.
+    # This prevents the request from falling through to other handlers.
+    respond @preflight 204
+
+    # --- End CORS Configuration ---
+
+    # Your other application routes and directives go here.
+}
