@@ -61,8 +61,44 @@ docker-buildx: ## Build and push docker image for the manager for cross-platform
 
 ##@ Testing
 
-.PHONY: test-run
-test-run:
+CADDY_404_URL ?= /404.html
+CADDY_IMPORTS_PATH ?= test/caddy.d/*
+CADDY_PORT ?= 8060
+CORS_DOMAINS ?= .*\.docker\.localhost|foo\.test
+PUBLIC_RESOURCES_DIR ?= test/public
+
+.PHONY: test
+test:
+	@echo "--> Validating Caddyfile"
 	caddy validate --config Caddyfile
-	caddy environ
-	caddy run --config Caddyfile
+	@echo "--> Starting Caddy server in background for testing"
+	caddy run --config Caddyfile & CADDY_PID=$$! ; \
+	trap 'echo "--> Stopping Caddy server (PID: $${CADDY_PID})"; kill $${CADDY_PID}; exit 0' EXIT; \
+	echo "Caddy server started with PID: $${CADDY_PID}" ; \
+	\
+	echo "--> Waiting for Caddy to be ready on port $(CADDY_PORT)..." ; \
+	tries=0; \
+	until curl -s --fail "http://localhost:$(CADDY_PORT)" > /dev/null 2>&1; do \
+		sleep 1; \
+		tries=$$((tries + 1)); \
+		if [ "$$tries" -ge "10" ]; then \
+			echo "Error: Caddy server did not start within 10 seconds."; \
+			exit 1; \
+		fi; \
+	done; \
+	echo "Caddy server is ready."; \
+	\
+	echo "--> Running tests"; \
+	echo "  - Testing for 200 OK on /"; \
+	curl -s --fail "http://localhost:$(CADDY_PORT)/" > /dev/null; \
+	echo "    Success: Received 200 OK"; \
+	\
+	echo "  - Testing for 404 Not Found on /non-existent-page"; \
+	if ! curl -s --fail "http://localhost:$(CADDY_PORT)/non-existent-page" > /dev/null 2>&1; then \
+		echo "    Success: Received 404 Not Found as expected"; \
+	else \
+		echo "    Error: Expected 404 but received a success status."; \
+		exit 1; \
+	fi; \
+	\
+	echo "--> All tests passed"

@@ -44,6 +44,8 @@
 
 	import {$CADDY_IMPORTS_PATH:/etc/caddy.d/*}
 
+	respond / 200
+
 	root * {$PUBLIC_RESOURCES_DIR:/public}
 	file_server
 
