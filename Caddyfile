@@ -22,6 +22,11 @@
 		header_regexp Origin ^https?://({$CORS_DOMAINS:localhost})$
 	}
 
+	@prefix {
+		expression "{$PATH_PREFIX:}" != ""
+		path {$PATH_PREFIX:} {$PATH_PREFIX:}/*
+	}
+
 	handle @cors_preflight {
 		header {
 			Access-Control-Allow-Origin "{header.Origin}"
@@ -41,6 +46,8 @@
 			Vary "Origin"
 		}
 	}
+
+	uri @prefix strip_prefix {$PATH_PREFIX:/_prefix_not_set}
 
 	import {$CADDY_IMPORTS_PATH:/etc/caddy.d/*}
 

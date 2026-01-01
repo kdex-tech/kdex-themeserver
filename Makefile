@@ -1,6 +1,12 @@
 # Image URL to use all building/pushing image targets
 IMG ?= kdex-tech/kdex-themeserver:latest
 
+REPOSITORY ?= 
+# if REPOSITORY is set make sure it ends with a /
+ifneq ($(REPOSITORY),)
+override REPOSITORY := $(REPOSITORY)/
+endif
+
 # CONTAINER_TOOL defines the container tool to be used for building images.
 # Be aware that the target commands are only tested with Docker which is
 # scaffolded by default. However, you might want to replace it to use other
@@ -51,12 +57,8 @@ PLATFORMS ?= linux/arm64,linux/amd64,linux/s390x,linux/ppc64le
 docker-buildx: ## Build and push docker image for the manager for cross-platform support
 	# copy existing Dockerfile and insert --platform=${BUILDPLATFORM} into Dockerfile.cross, and preserve the original Dockerfile
 	sed -e '1 s/\(^FROM\)/FROM --platform=\$$\{BUILDPLATFORM\}/; t' -e ' 1,// s//FROM --platform=\$$\{BUILDPLATFORM\}/' Dockerfile > Dockerfile.cross
-	- $(CONTAINER_TOOL) buildx create --name kdex-nexus-builder
-	$(CONTAINER_TOOL) buildx use kdex-nexus-builder
-	IMAGE_NAME=$$(echo "${IMG}" | cut -d: -f1); \
-	echo "IMAGE_NAME=$${IMAGE_NAME}"; \
-	$(CONTAINER_TOOL) buildx build --push --platform=$(PLATFORMS) --tag ${IMG} --tag $${IMAGE_NAME}:latest -f Dockerfile.cross .
-	- $(CONTAINER_TOOL) buildx rm kdex-nexus-builder
+	$(CONTAINER_TOOL) buildx inspect kdex-nexus-builder >/dev/null 2>&1 || $(CONTAINER_TOOL) buildx create --name kdex-nexus-builder --use
+	$(CONTAINER_TOOL) buildx build --push --platform=$(PLATFORMS) --tag ${REPOSITORY}${IMG} -f Dockerfile.cross .
 	rm Dockerfile.cross
 
 ##@ Testing
@@ -100,5 +102,20 @@ test:
 		echo "    Error: Expected 404 but received a success status."; \
 		exit 1; \
 	fi; \
+	\
+	echo "  - Testing PATH_PREFIX functionality"; \
+	PATH_PREFIX=/test-prefix CADDY_PORT=8061 caddy run --config Caddyfile & TEST_PREFIX_PID=$$! ; \
+	echo "    Waiting for Caddy with PATH_PREFIX to be ready on port 8061..."; \
+	tries=0; \
+	until curl -s --fail "http://localhost:8061/test-prefix/" > /dev/null 2>&1; do \
+		sleep 1; \
+		tries=$$((tries + 1)); \
+		if [ "$$tries" -ge "10" ]; then \
+			echo "    Error: Caddy server with PATH_PREFIX did not start."; \
+			kill $$TEST_PREFIX_PID; exit 1; \
+		fi; \
+	done; \
+	echo "    Success: PATH_PREFIX is working"; \
+	kill $$TEST_PREFIX_PID; \
 	\
 	echo "--> All tests passed"
