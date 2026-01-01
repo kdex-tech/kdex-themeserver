@@ -7,7 +7,7 @@ ENTRYPOINT ["tini", "-v", "--", "/entrypoint.sh"]
 
 ENV LANG="C.UTF-8"
 
-RUN apk add --no-cache bash tini && \
+RUN apk add --no-cache bash tini tree && \
 	\
 	mkdir -p /etc/caddy.d /public; \
 	\
