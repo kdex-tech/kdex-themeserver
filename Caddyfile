@@ -55,5 +55,18 @@
 
 	root * {$PUBLIC_RESOURCES_DIR:/public}
 	encode gzip
+
+	# Emit a Cache-Control header so browsers actually honor the ETag /
+	# Last-Modified validators file_server already sets. With NO Cache-Control,
+	# browsers fall back to *heuristic* freshness and skip revalidation, so an
+	# updated asset (notably an ES-module bundle served under /-/modules/*) keeps
+	# executing the stale cached copy even across a hard reload. The default
+	# `no-cache` does NOT disable caching: the response is still stored, but the
+	# browser must revalidate via a conditional request (-> 304 when unchanged,
+	# fresh bytes when changed) before reuse. Override per deployment via the
+	# CACHE_CONTROL env (e.g. `public, max-age=31536000, immutable` for
+	# content-hashed URLs). See kdex-tech/backend-static#3, kdex-tech/host-manager#139.
+	header Cache-Control "{$CACHE_CONTROL:no-cache}"
+
 	file_server
 }

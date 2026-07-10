@@ -75,7 +75,7 @@ test:
 	caddy validate --config Caddyfile
 	@echo "--> Starting Caddy server in background for testing"
 	caddy run --config Caddyfile & CADDY_PID=$$! ; \
-	trap 'echo "--> Stopping Caddy server (PID: $${CADDY_PID})"; kill $${CADDY_PID}; exit 0' EXIT; \
+	trap 'rc=$$?; echo "--> Stopping Caddy server (PID: $${CADDY_PID})"; kill $${CADDY_PID} 2>/dev/null; exit $$rc' EXIT; \
 	echo "Caddy server started with PID: $${CADDY_PID}" ; \
 	\
 	echo "--> Waiting for Caddy to be ready on port $(CADDY_PORT)..." ; \
@@ -152,5 +152,32 @@ test:
 		exit 1; \
 	fi; \
 	echo "    Success: Received 304 Not Modified for index.html"; \
+	\
+	echo "  - Testing Cache-Control header (default no-cache, enables ETag revalidation)"; \
+	CC=$$(curl -s -i "http://localhost:$(CADDY_PORT)/index.html" -o /dev/null -D - | grep -i '^cache-control:' | cut -d: -f2- | sed 's/^[[:space:]]*//' | tr -d '\r\n' || true); \
+	if [ "$$CC" != "no-cache" ]; then \
+		echo "    Error: Expected Cache-Control 'no-cache' but received '$$CC' for index.html"; \
+		exit 1; \
+	fi; \
+	echo "    Success: Cache-Control 'no-cache' present on index.html"; \
+	\
+	echo "  - Testing CACHE_CONTROL override"; \
+	CACHE_CONTROL="public, max-age=60, must-revalidate" CADDY_PORT=8062 caddy run --config Caddyfile & OVERRIDE_PID=$$! ; \
+	tries=0; \
+	until curl -s --fail "http://localhost:8062/" > /dev/null 2>&1; do \
+		sleep 1; \
+		tries=$$((tries + 1)); \
+		if [ "$$tries" -ge "10" ]; then \
+			echo "    Error: Caddy with CACHE_CONTROL override did not start."; \
+			kill $$OVERRIDE_PID; exit 1; \
+		fi; \
+	done; \
+	CC=$$(curl -s -i "http://localhost:8062/index.html" -o /dev/null -D - | grep -i '^cache-control:' | cut -d: -f2- | sed 's/^[[:space:]]*//' | tr -d '\r\n' || true); \
+	kill $$OVERRIDE_PID; \
+	if [ "$$CC" != "public, max-age=60, must-revalidate" ]; then \
+		echo "    Error: Expected overridden Cache-Control but received '$$CC'"; \
+		exit 1; \
+	fi; \
+	echo "    Success: CACHE_CONTROL override honored"; \
 	\
 	echo "--> All tests passed"
